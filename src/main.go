@@ -10,7 +10,6 @@ import (
 	"math/rand"
 	"os"
 	"runtime"
-	"syscall"
 	"time"
 
 	"github.com/getlantern/systray"
@@ -26,54 +25,10 @@ const (
 
 //go:embed icon.ico
 var icon []byte
-var local_os string
-
-func detectOS() string {
-	local_os = runtime.GOOS
-	switch local_os {
-	case WINDOWS:
-		break
-	case LINUX:
-		//获取环境变量DISPLAY
-		display := os.Getenv("DISPLAY")
-		if display == "" {
-			local_os = NOGUI
-		}
-	default:
-		fmt.Println("没做适配，自求多福吧")
-	}
-	return local_os
-}
-
-func noSingleProcess() bool {
-	switch local_os {
-	case WINDOWS:
-		_, err := checkSingletonWindows()
-		return err == syscall.ERROR_ALREADY_EXISTS
-	case LINUX:
-		//TODO
-	}
-	return false
-}
-
-func messageBox(title string, content string) {
-	switch local_os {
-	case WINDOWS:
-		messageBoxWindows(title, content)
-	case LINUX:
-		//TODO
-	}
-
-}
 
 func main() {
-	local_os := detectOS()
-	if local_os == NOGUI {
-		fmt.Println("当前环境无GUI，无法弹出消息框，请自行查看错误信息")
-		return
-	}
-	if noSingleProcess() {
-		messageBox("错误", "程序已运行。看右下角系统托盘(Windows)")
+	if checkSingletonWindows() {
+		messageBoxWindows("错误", "程序已运行。看右下角系统托盘(Windows)")
 		return
 	}
 	// 设置systray
@@ -97,7 +52,7 @@ func onReady() {
 			case <-mixItem.ClickedCh:
 				mix()
 			case <-aboutItem.ClickedCh:
-				messageBox("关于", "本程序功能为，从剪切板读取图像(jpg, png, bmp, webp)，随机修改若干像素，写回剪切板\n十月叶~Leaf Oct 开发")
+				messageBoxWindows("关于", "本程序功能为，从剪切板读取图像(jpg, png, bmp, webp)，随机修改若干像素，写回剪切板\n十月叶~Leaf Oct 开发")
 			case <-exitItem.ClickedCh:
 				systray.Quit()
 			case <-saveItem.ClickedCh:
@@ -114,12 +69,13 @@ func onExit() {
 func save() {
 	img_bytes := clipboard.Read(clipboard.FmtImage)
 	if len(img_bytes) == 0 {
-		messageBox("错误", "复制的不是图像")
+		messageBoxWindows("错误", "复制的不是图像")
 		return
 	}
 	filename := fmt.Sprintf("%d", time.Now().UnixMilli()) + ".png"
 	filter := "Image Files (*.png)\\0*.png\\0"
 	SaveBytesWindows(filename, filter, img_bytes)
+
 	img_bytes = nil
 	runtime.GC()
 }
@@ -127,12 +83,12 @@ func save() {
 func mix() {
 	img_bytes := clipboard.Read(clipboard.FmtImage)
 	if len(img_bytes) == 0 {
-		messageBox("错误", "复制的不是图像")
+		messageBoxWindows("错误", "复制的不是图像")
 		return
 	}
 	img, err := png.Decode(bytes.NewReader(img_bytes))
 	if err != nil {
-		messageBox("解析图像错误", "读取剪切板图像后转化的格式不是png。问题可能出在clipboard库")
+		messageBoxWindows("解析图像错误", "读取剪切板图像后转化的格式不是png。问题可能出在clipboard库")
 		return
 	}
 	bound := img.Bounds()
@@ -146,8 +102,8 @@ func mix() {
 			fmt.Println(x, y, " : ", r, g, b)
 		}
 	}
-	// 随机更改五个像素的值
-	for i := 0; i < 5; i += 1 {
+	// 随机更改10个像素的值
+	for i := 0; i < 10; i += 1 {
 		random_x := rand.Intn(width)
 		random_y := rand.Intn(height)
 		pixel := new_image.At(random_x, random_y)
@@ -161,7 +117,7 @@ func mix() {
 	var modified_png bytes.Buffer
 	err = png.Encode(&modified_png, new_image)
 	if err != nil {
-		messageBox("失败", "混淆后的图片无法编码")
+		messageBoxWindows("失败", "混淆后的图片无法编码")
 		return
 	}
 	clipboard.Write(clipboard.FmtImage, modified_png.Bytes())

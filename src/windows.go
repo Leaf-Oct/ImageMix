@@ -1,3 +1,6 @@
+//go:build windows
+// +build windows
+
 package main
 
 import (
@@ -11,7 +14,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func messageBoxWindows(title, text string) {
+func messageBoxWindows(title string, text string) {
 	user32 := windows.NewLazySystemDLL("user32")
 	MessageBox := user32.NewProc("MessageBoxW")
 
@@ -24,17 +27,18 @@ func messageBoxWindows(title, text string) {
 	MessageBox.Call(uintptr(0), uintptr(unsafe.Pointer(text16)), uintptr(unsafe.Pointer(title16)), uintptr(windows.MB_OK))
 }
 
-func checkSingletonWindows() (windows.Handle, error) {
+func checkSingletonWindows() bool {
 	path, err := os.Executable()
 	if err != nil {
-		return 0, err
+		return false
 	}
 	hashName := md5.Sum([]byte(path))
 	name, err := syscall.UTF16PtrFromString("Local\\" + hex.EncodeToString(hashName[:]))
 	if err != nil {
-		return 0, err
+		return false
 	}
-	return windows.CreateMutex(nil, false, name)
+	_, err = windows.CreateMutex(nil, false, name)
+	return err == syscall.ERROR_ALREADY_EXISTS
 }
 
 // 这些是Windows API相关的常量
